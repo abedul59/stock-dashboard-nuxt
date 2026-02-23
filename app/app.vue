@@ -117,17 +117,41 @@ const simulatedEPS = computed(() => {
   return ((simNetIncome / capital) * 10).toFixed(2)
 })
 
-// 上傳 JSON
-const handleFileUpload = async (event) => {
-  const file = event.target.files[0]
-  if (!file) return
+// 新增一個變數來暫存選取的檔案
+const selectedFile = ref(null)
+
+// 當使用者選取檔案時觸發
+const onFileSelected = (event) => {
+  selectedFile.value = event.target.files[0]
+}
+
+// 當使用者點擊「上傳」按鈕時觸發
+const uploadFile = async () => {
+  if (!selectedFile.value) {
+    alert('請先選擇一個 JSON 檔案！')
+    return
+  }
+  
   const reader = new FileReader()
   reader.onload = async (e) => {
-    const json = JSON.parse(e.target.result)
-    await $fetch('/api/upload', { method: 'POST', body: json })
-    alert('上傳成功！')
+    try {
+      const json = JSON.parse(e.target.result)
+      const res = await $fetch('/api/upload', { method: 'POST', body: json })
+      if (res && res.success) {
+        alert(res.message) // 顯示成功匯入幾筆的訊息
+        // 上傳成功後，可以直接幫使用者帶入最新上傳的股票代碼（可選）
+        const firstKey = Object.keys(json)[0]
+        if (firstKey) {
+          searchQuery.value.id = firstKey
+          fetchStockData() // 自動載入剛上傳的資料
+        }
+      }
+    } catch (err) {
+      console.error(err)
+      alert('上傳發生錯誤，請檢查資料庫連線或檔案格式。')
+    }
   }
-  reader.readAsText(file)
+  reader.readAsText(selectedFile.value)
 }
 
 // 獲取資料
