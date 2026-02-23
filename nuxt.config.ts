@@ -1,9 +1,10 @@
 export default defineNuxtConfig({
   css: ['bootstrap/dist/css/bootstrap.min.css'],
   runtimeConfig: {
-    mongodbUri: process.env.MONGODB_URI, // 伺服器端可讀取
+    // 新增這兩行
+    supabaseUrl: process.env.SUPABASE_URL,
+    supabaseKey: process.env.SUPABASE_KEY,
   },
-  // Vercel 部署設定
   nitro: {
     preset: 'vercel'
   }
