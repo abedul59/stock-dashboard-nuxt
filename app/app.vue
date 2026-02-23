@@ -24,15 +24,21 @@
           </div>
         </div>
         
-        <div class="col-lg-6">
+<div class="col-lg-6">
           <div class="card shadow-sm h-100">
             <div class="card-body">
               <h6 class="card-title text-success fw-bold">📂 上傳數據 (JSON)</h6>
-              <input type="file" @change="handleFileUpload" class="form-control" accept=".json">
+              <div class="row g-2 align-items-center">
+                <div class="col-9">
+                  <input type="file" @change="onFileSelected" class="form-control form-control-sm" accept=".json">
+                </div>
+                <div class="col-3">
+                  <button @click="uploadFile" class="btn btn-success btn-sm w-100">上傳</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
       <div v-if="stockData" class="card shadow-sm mb-5">
         <div class="card-header bg-white py-3">
