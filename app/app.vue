@@ -1,45 +1,52 @@
 <template>
-  <div class="bg-light min-vh-100">
-    <nav class="navbar navbar-dark bg-dark mb-4">
+  <div class="bg-light min-vh-100 pb-5">
+    <nav class="navbar navbar-dark bg-dark mb-4 shadow-sm">
       <div class="container">
-        <a class="navbar-brand" href="/">📈 台股全方位分析系統 (Nuxt + Vercel版)</a>
+        <a class="navbar-brand" href="/">📈 台股全方位分析系統 (Nuxt + Supabase版)</a>
       </div>
     </nav>
 
     <div class="container">
       <div class="row mb-4 g-3">
         <div class="col-lg-6">
-          <div class="card shadow-sm h-100">
+          <div class="card card-shadow h-100">
             <div class="card-body">
-              <h6 class="card-title text-primary fw-bold">🔍 查詢股票</h6>
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="card-title text-primary fw-bold mb-0">🔍 查詢股票</h6>
+                <button type="button" class="btn btn-outline-secondary btn-sm shadow-sm" data-bs-toggle="modal" data-bs-target="#stockListModal">
+                  📋 已匯入名單
+                </button>
+              </div>
               <div class="row g-2 align-items-center">
+                <div class="col-3">
+                  <input v-model="searchQuery.year" type="number" class="form-control form-control-sm" placeholder="年份(選填)">
+                </div>
+                <div class="col-3">
+                  <input v-model="searchQuery.month" type="number" class="form-control form-control-sm" placeholder="月份(選填)">
+                </div>
                 <div class="col-4">
-                  <input v-model="searchQuery.id" type="text" class="form-control form-control-sm" placeholder="代碼">
-                </div>
-                <div class="col-3">
-                  <input v-model="searchQuery.year" type="number" class="form-control form-control-sm" placeholder="年 (選填)">
-                </div>
-                <div class="col-3">
-                  <input v-model="searchQuery.month" type="number" class="form-control form-control-sm" placeholder="月 (選填)">
+                  <input v-model="searchQuery.id" type="text" class="form-control form-control-sm" placeholder="股票代碼">
                 </div>
                 <div class="col-2">
-                  <button @click="fetchStockData" class="btn btn-primary btn-sm w-100">Go</button>
+                  <button @click="fetchStockData" class="btn btn-primary btn-sm w-100 fw-bold">Go</button>
                 </div>
               </div>
             </div>
           </div>
         </div>
-        
+
         <div class="col-lg-6">
-          <div class="card shadow-sm h-100">
+          <div class="card card-shadow h-100">
             <div class="card-body">
-              <h6 class="card-title text-success fw-bold">📂 上傳數據 (JSON)</h6>
+              <h6 class="card-title text-success fw-bold mb-3">📂 上傳數據 (JSON)</h6>
               <div class="row g-2 align-items-center">
                 <div class="col-9">
                   <input type="file" @change="onFileSelected" class="form-control form-control-sm" accept=".json">
                 </div>
                 <div class="col-3">
-                  <button @click="uploadFile" class="btn btn-success btn-sm w-100">上傳</button>
+                  <button @click="uploadFile" class="btn btn-success btn-sm w-100 fw-bold" :disabled="isUploading">
+                    {{ isUploading ? '上傳中...' : '上傳' }}
+                  </button>
                 </div>
               </div>
             </div>
@@ -47,128 +54,311 @@
         </div>
       </div>
 
-      <div v-if="stockData" class="card shadow-sm mb-5 animate__animated animate__fadeIn">
-        <div class="card-header bg-white py-3">
-          <h4 class="mb-0 fw-bold">
-            <span class="badge bg-primary me-2">{{ stockData.stock_id }}</span>
-            {{ stockData.stock_name }}
+      <div v-if="stockData" class="card card-shadow mb-5 animate__animated animate__fadeIn">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap">
+          <h4 class="mb-0 fw-bold text-dark">
+            <span class="badge bg-primary me-2">{{ stockData.stock_id }}</span>{{ stockData.stock_name }}
           </h4>
-          <small class="text-muted mt-2 d-block">資料年月: {{ stockData.data_year }} / {{ stockData.data_month }}</small>
+          <small class="text-muted mt-2 mt-md-0">
+            基準日: {{ metaData.QueryDate }} ({{ stockData.data_year }} / {{ stockData.data_month }})
+          </small>
         </div>
-        
+
         <div class="card-body p-4">
-          <div class="row g-4">
-            <div class="col-lg-5">
-               <h5 class="fw-bold text-secondary border-bottom pb-2">📊 原始預估 (JSON)</h5>
-               <ul class="list-group list-group-flush mb-3">
-                 <li class="list-group-item d-flex justify-content-between px-0">
-                   <span>預估 EPS</span><strong>{{ perData.Predict_EPS }}</strong>
-                 </li>
-                 <li class="list-group-item d-flex justify-content-between px-0">
-                   <span>預估營收</span><strong>{{ perData.Predict_Rev }} 億</strong>
-                 </li>
-                 <li class="list-group-item d-flex justify-content-between px-0">
-                   <span>原始營收年增率</span><strong>{{ perData.YoY_Use }}</strong>
-                 </li>
-                 <li class="list-group-item d-flex justify-content-between px-0">
-                   <span>平均淨利率</span><strong>{{ perData.Net_Avg }}</strong>
-                 </li>
-                 <li class="list-group-item d-flex justify-content-between px-0">
-                   <span>股本</span><strong>{{ perData.Capital }} 億</strong>
-                 </li>
-               </ul>
+          <div class="row g-3 mb-4 text-center">
+            <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card" style="border-left-color: #0d6efd !important;"><small class="text-muted d-block mb-1">最新成交</small><span class="fs-5 fw-bold">{{ perData.Now_Price }}</span></div></div>
+            <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card"><small class="text-muted d-block mb-1">預估營收</small><span class="fs-5">{{ perData.Predict_Rev }}</span></div></div>
+            <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card" style="border-left-color: #dc3545 !important;"><small class="text-muted d-block mb-1">預估EPS</small><span class="fs-4 text-danger fw-bold">{{ perData.Predict_EPS }}</span></div></div>
+            <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card"><small class="text-muted d-block mb-1">目標價(高)</small><span class="fs-5 text-success fw-bold">{{ perData.Target_H }}</span></div></div>
+            <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card"><small class="text-muted d-block mb-1">目標價(低)</small><span class="fs-5 text-secondary fw-bold">{{ perData.Target_L }}</span></div></div>
+            <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card"><small class="text-muted d-block mb-1">潛在報酬</small><span class="fs-5 text-danger fw-bold">{{ perData.Profit }}</span></div></div>
+          </div>
+
+          <ul class="nav nav-tabs nav-fill mb-4" id="stockTabs" role="tablist">
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-sim">🧪 模擬試算</button></li>
+            <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-hist">歷史股價</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-rev">營收</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-net">淨利</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-six">六大指標</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-q4">Q4 檢查</button></li>
+          </ul>
+
+          <div class="tab-content" id="stockTabsContent">
+            <div class="tab-pane fade" id="tab-sim">
+              <div class="row g-4">
+                <div class="col-lg-5">
+                  <div class="card h-100 border-0 bg-light">
+                    <div class="card-body">
+                      <h5 class="card-title text-secondary fw-bold mb-3 border-bottom pb-2">📊 原始預估 (JSON)</h5>
+                      <ul class="list-group list-group-flush bg-transparent mb-3">
+                        <li class="list-group-item bg-transparent d-flex justify-content-between px-0"><span>預估 EPS</span><strong class="text-dark">{{ perData.Predict_EPS }}</strong></li>
+                        <li class="list-group-item bg-transparent d-flex justify-content-between px-0"><span>原始預估營收</span><strong>{{ perData.Predict_Rev }} 億</strong></li>
+                        <li class="list-group-item bg-transparent d-flex justify-content-between px-0"><span>原始營收年增率</span><strong>{{ perData.YoY_Use }}</strong></li>
+                        <li class="list-group-item bg-transparent d-flex justify-content-between px-0"><span>平均淨利率</span><strong>{{ perData.Net_Avg }}</strong></li>
+                        <li class="list-group-item bg-transparent d-flex justify-content-between px-0"><span>股本</span><strong>{{ perData.Capital }} 億</strong></li>
+                      </ul>
+                      <div class="p-3 rounded note-box">
+                        <h6 class="fw-bold text-dark border-bottom border-warning pb-2 mb-2">💡 說明</h6>
+                        <p class="small text-muted mb-0">程式會先反推「基期營收」，再依據您輸入的成長率與淨利率重新計算 EPS。<br><em>(基期營收 × 新成長率 × 新淨利率) ÷ 股本</em></p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="col-lg-7">
+                  <div class="card border-primary shadow-sm">
+                    <div class="card-header bg-primary text-white fw-bold">✏️ 手動調整參數 (即時連動計算)</div>
+                    <div class="card-body">
+                      <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                          <label class="form-label small fw-bold">營收年增率 (%)</label>
+                          <div class="input-group">
+                            <input type="number" step="any" v-model="simInputs.yoy" class="form-control">
+                            <span class="input-group-text">%</span>
+                          </div>
+                        </div>
+                        <div class="col-md-6">
+                          <label class="form-label small fw-bold">稅後淨利率 (%)</label>
+                          <div class="input-group">
+                            <input type="number" step="any" v-model="simInputs.net" class="form-control">
+                            <span class="input-group-text">%</span>
+                          </div>
+                        </div>
+                        <div class="col-md-6">
+                          <label class="form-label small fw-bold">本益比 (高)</label>
+                          <input type="number" step="any" v-model="simInputs.peH" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                          <label class="form-label small fw-bold">本益比 (低)</label>
+                          <input type="number" step="any" v-model="simInputs.peL" class="form-control">
+                        </div>
+                      </div>
+
+                      <div class="mt-4 pt-3 border-top">
+                        <div class="alert alert-info d-flex justify-content-between align-items-center mb-3">
+                          <span>模擬計算 EPS</span>
+                          <span class="h3 mb-0 fw-bold text-primary">{{ simRes.calc_eps }}</span>
+                        </div>
+                        <div class="row text-center mb-3">
+                          <div class="col-4 border-end">
+                            <small class="text-muted">目標價(高)</small>
+                            <div class="fw-bold text-success">{{ simRes.target_h }}</div>
+                            <small class="text-success">{{ simRes.upside }}</small>
+                          </div>
+                          <div class="col-4 border-end">
+                            <small class="text-muted">即時價 (爬蟲)</small>
+                            <div class="fw-bold text-dark">{{ simRes.live_price }}</div>
+                          </div>
+                          <div class="col-4">
+                            <small class="text-muted">目標價(低)</small>
+                            <div class="fw-bold text-danger">{{ simRes.target_l }}</div>
+                            <small class="text-danger">{{ simRes.downside }}</small>
+                          </div>
+                        </div>
+                        <div class="text-center mb-3">
+                          <span class="badge bg-dark rounded-pill px-3 py-2">風險報酬比 (RR): {{ simRes.rr }}</span>
+                        </div>
+
+                        <div class="accordion" id="calcAccordion">
+                          <div class="accordion-item border-0">
+                            <h2 class="accordion-header">
+                              <button class="accordion-button collapsed bg-light py-2 text-muted small" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne">
+                                👁️ 查看詳細計算過程 (驗證用)
+                              </button>
+                            </h2>
+                            <div id="collapseOne" class="accordion-collapse collapse" data-bs-parent="#calcAccordion">
+                              <div class="accordion-body p-0">
+                                <table class="table table-sm table-bordered mb-0 small text-center">
+                                  <thead class="table-light"><tr><th>步驟</th><th>結果</th></tr></thead>
+                                  <tbody>
+                                    <tr v-for="row in simRes.details" :key="row.step">
+                                      <td>{{ row.step }}<br><small class="text-muted font-monospace">{{ row.formula }}</small></td>
+                                      <td class="fw-bold align-middle">{{ row.result }}</td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div class="col-lg-7">
-               <div class="p-3 border rounded bg-light border-primary shadow-sm">
-                 <h5 class="fw-bold text-primary mb-3">✏️ 手動調整參數 (即時連動試算)</h5>
-                 <div class="row g-3 mb-3">
-                    <div class="col-6">
-                      <label class="form-label small fw-bold">營收年增率 (%)</label>
-                      <input v-model="simInputs.yoy" type="number" step="any" class="form-control">
-                    </div>
-                    <div class="col-6">
-                      <label class="form-label small fw-bold">稅後淨利率 (%)</label>
-                      <input v-model="simInputs.net" type="number" step="any" class="form-control">
-                    </div>
-                 </div>
-                 
-                 <div class="alert alert-info mt-3 mb-0">
-                   <div class="d-flex justify-content-between align-items-center mb-2">
-                     <span class="fw-bold text-dark">即時股價 (爬蟲)</span>
-                     <span class="h5 mb-0 text-dark">{{ livePrice !== null ? livePrice : '抓取中/失敗' }}</span>
-                   </div>
-                   <hr class="my-2">
-                   <div class="d-flex justify-content-between align-items-center">
-                     <span class="fw-bold text-primary">模擬計算 EPS</span>
-                     <span class="h3 mb-0 fw-bold text-primary">{{ simulatedEPS }} 元</span>
-                   </div>
-                 </div>
-               </div>
+            <div class="tab-pane fade show active" id="tab-hist">
+              <div class="table-responsive">
+                <table class="table table-bordered table-striped text-center align-middle">
+                  <thead class="table-dark"><tr><th>年份</th><th>最高</th><th>最低</th><th>EPS</th><th>PE 高</th><th>PE 低</th></tr></thead>
+                  <tbody>
+                    <tr class="table-warning fw-bold">
+                      <td>{{ perData.Current_Year }}/{{ perData.Current_Year_ROC }}(預估)</td>
+                      <td class="text-danger">{{ perData.Target_H }}</td><td class="text-success">{{ perData.Target_L }}</td>
+                      <td class="text-primary">{{ perData.Predict_EPS }}</td><td>-</td><td>-</td>
+                    </tr>
+                    <tr v-for="(row, index) in histRows" :key="index">
+                      <td>{{ row.year_str }} <span v-if="index === 0 && perData.EPS1_Is_Est">(預)</span></td>
+                      <td>{{ row.h }}</td><td>{{ row.l }}</td><td>{{ row.eps }}</td><td>{{ row.pe_h }}</td><td>{{ row.pe_l }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
+
+            <div class="tab-pane fade" id="tab-rev">
+              <div class="row"><div class="col-md-8 mx-auto">
+                <table class="table table-sm table-bordered text-center">
+                  <thead class="table-light"><tr><th>月份</th><th>營收(億)</th><th>年增率</th></tr></thead>
+                  <tbody>
+                    <tr v-for="row in revRows" :key="'rev'+row.name"><td>{{ row.name }}</td><td>{{ row.val }}</td><td>-</td></tr>
+                    <tr class="table-secondary"><td>---</td><td></td><td></td></tr>
+                    <tr v-for="row in yoyRows" :key="'yoy'+row.name"><td>{{ row.name }}</td><td>-</td><td :class="row.yoy.includes('-') ? 'text-success' : 'text-danger'">{{ row.yoy }}</td></tr>
+                  </tbody>
+                </table>
+              </div></div>
+            </div>
+
+            <div class="tab-pane fade" id="tab-net">
+              <div class="row"><div class="col-md-6 mx-auto">
+                <table class="table table-bordered text-center">
+                  <thead class="table-light"><tr><th>季度</th><th>淨利率</th></tr></thead>
+                  <tbody>
+                    <tr v-for="row in netRows" :key="row.name"><td>{{ row.name }}</td><td>{{ row.val }}</td></tr>
+                  </tbody>
+                </table>
+              </div></div>
+            </div>
+
+            <div class="tab-pane fade" id="tab-six">
+              <div class="alert alert-info text-center mb-3"><strong>🏆 總評分：</strong> <span class="fs-4 fw-bold text-danger">{{ sixData.Average }}</span> 分</div>
+              <div class="row g-3">
+                <div class="col-md-4 col-sm-6" v-for="(item, key) in sixData" :key="key" v-show="key !== 'Name' && key !== 'Average'">
+                  <div class="card h-100 card-shadow">
+                    <div class="card-header d-flex justify-content-between small">
+                      <strong>{{ key }}</strong>
+                      <span class="badge" :class="['A', 'AA'].includes(item.Rating) ? 'bg-danger' : 'bg-secondary'">{{ item.Rating }}</span>
+                    </div>
+                    <div class="card-body p-0">
+                      <table class="table table-sm table-striped mb-0 text-center">
+                        <thead><tr><th>項目</th><th>數值</th></tr></thead>
+                        <tbody><tr v-for="(d, i) in item.Data" :key="i"><td>{{ d.Name }}</td><td>{{ d.Val }}</td></tr></tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-pane fade" id="tab-q4">
+              <div class="row"><div class="col-md-8 mx-auto">
+                <table class="table table-bordered table-hover text-center">
+                  <thead class="table-dark"><tr><th>項目</th><th>數值 / 狀態</th></tr></thead>
+                  <tbody>
+                    <tr v-for="(row, index) in q4Rows" :key="index">
+                      <td class="fw-bold">{{ row.label }}</td><td>{{ row.val }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div></div>
+            </div>
+
           </div>
         </div>
       </div>
+    </div>
 
+    <div class="modal fade" id="stockListModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header bg-light">
+            <h5 class="modal-title fw-bold text-dark">📋 資料庫已有股票</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body p-0">
+            <div v-if="availableStocks.length > 0" class="list-group list-group-flush">
+              <a href="#" v-for="stock in availableStocks" :key="stock.id" @click.prevent="selectStockFromModal(stock.id)" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                <span><strong class="text-primary me-2">{{ stock.id }}</strong> {{ stock.name }}</span>
+                <span class="badge bg-secondary rounded-pill text-white">點擊帶入</span>
+              </a>
+            </div>
+            <div v-else class="text-center text-muted p-4">目前資料庫尚無任何股票，請先上傳 JSON 數據。</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useHead } from '#imports'
 
-// === 狀態管理 ===
-const searchQuery = ref({ id: '', year: '', month: '' }) // 查詢條件
-const stockData = ref(null) // 資料庫抓回來的股票資料
-const perData = ref({}) // JSON 內的 PER_Analysis 區塊
-const livePrice = ref(null) // 即時股價
-const selectedFile = ref(null) // 暫存使用者選取的檔案
-
-// 模擬輸入參數 (與畫面綁定)
-const simInputs = ref({ yoy: 0, net: 0 })
-
-// === 模擬試算邏輯 (即時連動) ===
-const simulatedEPS = computed(() => {
-  if (!stockData.value) return 0
-  
-  const capital = parseFloat(perData.value.Capital || 1)
-  const origRev = parseFloat(perData.value.Predict_Rev || 0)
-  const origYoy = parseFloat((perData.value.YoY_Use || '0').replace('%', '')) / 100
-  
-  // 1. 反推基期營收
-  const baseRev = origYoy !== -1 ? origRev / (1 + origYoy) : origRev
-  
-  // 2. 依照輸入的新 % 數，模擬新營收與淨利
-  const simRev = baseRev * (1 + (simInputs.value.yoy / 100))
-  const simNetIncome = simRev * (simInputs.value.net / 100)
-  
-  // 3. 計算並回傳新 EPS
-  return ((simNetIncome / capital) * 10).toFixed(2)
+// 載入 Bootstrap JS 讓 Modal 與 Tabs 生效
+useHead({
+  script: [{ src: 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js', tagPosition: 'bodyClose' }]
 })
 
-// === 上傳檔案邏輯 ===
+// === 狀態管理 ===
+const searchQuery = ref({ id: '', year: '', month: '' })
+const stockData = ref(null)
+const perData = ref({})
+const metaData = ref({})
+const sixData = ref({})
+const livePrice = ref(null)
+const availableStocks = ref([])
+const selectedFile = ref(null)
+const isUploading = ref(false)
+const simInputs = ref({ yoy: 0, net: 0, peH: 0, peL: 0 })
+
+// === 輔助函式：解析百分比 ===
+const parsePct = (val) => {
+  if (!val) return 0;
+  return parseFloat(String(val).replace('%', '').replace(',', '').trim()) / 100 || 0;
+}
+
+// === API：獲取初始股票清單 ===
+const fetchAvailableStocks = async () => {
+  try {
+    const res = await $fetch('/api/stock')
+    if (res && res.availableStocks) {
+      availableStocks.value = res.availableStocks
+    }
+  } catch (err) {
+    console.error("無法取得股票清單", err)
+  }
+}
+
+// 頁面載入時自動抓取清單供 Modal 使用
+onMounted(() => {
+  fetchAvailableStocks()
+})
+
+// === Modal 點擊帶入 ===
+const selectStockFromModal = (stockId) => {
+  searchQuery.value.id = stockId
+  fetchStockData()
+  // 關閉 Modal
+  document.querySelector('#stockListModal .btn-close')?.click()
+}
+
+// === API：上傳檔案 ===
 const onFileSelected = (event) => {
-  // 將選取的檔案存入變數，等待點擊按鈕
   selectedFile.value = event.target.files[0]
 }
 
 const uploadFile = async () => {
-  if (!selectedFile.value) {
-    alert('請先選擇一個 JSON 檔案！')
-    return
-  }
-  
+  if (!selectedFile.value) { return alert('請先選擇 JSON 檔案！') }
+  isUploading.value = true
   const reader = new FileReader()
   reader.onload = async (e) => {
     try {
       const json = JSON.parse(e.target.result)
-      // 發送 POST 請求到我們寫好的 /server/api/upload.post.ts
       const res = await $fetch('/api/upload', { method: 'POST', body: json })
-      
       if (res && res.success) {
-        alert(res.message) // 顯示成功訊息
-        
-        // 上傳成功後，自動幫使用者把查詢框填上第一個股票代碼並搜尋
+        alert(res.message)
+        fetchAvailableStocks() // 更新 Modal 清單
         const firstKey = Object.keys(json)[0]
         if (firstKey) {
           searchQuery.value.id = firstKey
@@ -176,52 +366,149 @@ const uploadFile = async () => {
         }
       }
     } catch (err) {
-      console.error(err)
-      alert('上傳發生錯誤，請檢查伺服器狀態或檔案格式。')
+      alert('上傳發生錯誤！')
+    } finally {
+      isUploading.value = false
     }
   }
   reader.readAsText(selectedFile.value)
 }
 
-// === 查詢股票資料邏輯 ===
+// === API：查詢股票 ===
 const fetchStockData = async () => {
-  if (!searchQuery.value.id) {
-    alert('請輸入股票代碼')
-    return
-  }
-
+  if (!searchQuery.value.id) return alert('請輸入股票代碼')
   try {
-    // 發送 GET 請求到 /server/api/stock.get.ts
     const res = await $fetch('/api/stock', { params: searchQuery.value })
-    
     if (res.currentData) {
       stockData.value = res.currentData
-      perData.value = res.currentData.raw_data.PER_Analysis || {}
+      perData.value = res.currentData.raw_data?.PER_Analysis || {}
+      sixData.value = res.currentData.raw_data?.Six_Indicators || {}
+      metaData.value = res.currentData.raw_data?.Meta || {}
       
-      // 將資料庫原本的 % 數預設填入模擬輸入框
+      // 初始化模擬參數
       simInputs.value.yoy = parseFloat((perData.value.YoY_Use || '0').replace('%', ''))
       simInputs.value.net = parseFloat((perData.value.Net_Avg || '0').replace('%', ''))
+      simInputs.value.peH = parseFloat(perData.value.PE_Use_H || 0)
+      simInputs.value.peL = parseFloat(perData.value.PE_Use_L || 0)
       
-      // 同步呼叫爬蟲 API 抓取即時股價
-      livePrice.value = null // 先清空，顯示抓取中
+      // 抓即時股價
+      livePrice.value = null
       const priceRes = await $fetch('/api/live-price', { params: { id: searchQuery.value.id } })
       livePrice.value = priceRes.price
     } else {
-      alert('資料庫中找不到該股票資料，請確認代碼或重新上傳。')
+      alert('資料庫中找不到該股票資料。')
       stockData.value = null
     }
   } catch (err) {
-    console.error(err)
     alert('讀取資料失敗')
   }
 }
+
+// === 計算屬性：還原 Django get_dashboard_data 邏輯 ===
+
+// 1. 模擬試算 (含詳細算式)
+const simRes = computed(() => {
+  if (!stockData.value) return {}
+  const per = perData.value
+  const origYoy = parsePct(per.YoY_Use)
+  const origNet = parsePct(per.Net_Avg)
+  const capital = parseFloat(per.Capital || 1)
+  const origRevPredict = parseFloat(per.Predict_Rev || 0)
+  
+  const details = []
+  
+  // A. 反推基期
+  const baseRev = (1 + origYoy) !== 0 ? origRevPredict / (1 + origYoy) : origRevPredict
+  details.push({ step: "1. 反推基期營收", formula: `預估營收 ${origRevPredict} ÷ (1 + 原始YoY ${(origYoy*100).toFixed(2)}%)`, result: `${baseRev.toFixed(2)} 億` })
+  
+  // B. 取得輸入值
+  const simYoy = simInputs.value.yoy / 100
+  const simNet = simInputs.value.net / 100
+  const simPeH = simInputs.value.peH || 0
+  const simPeL = simInputs.value.peL || 0
+  
+  // C. 新營收與淨利
+  const simRev = baseRev * (1 + simYoy)
+  details.push({ step: "2. 模擬營收", formula: `基期 ${baseRev.toFixed(2)} × (1 + 設定YoY ${(simYoy*100).toFixed(2)}%)`, result: `${simRev.toFixed(2)} 億` })
+  
+  const simNetIncome = simRev * simNet
+  details.push({ step: "3. 模擬淨利", formula: `營收 ${simRev.toFixed(2)} × 設定淨利率 ${(simNet*100).toFixed(2)}%`, result: `${simNetIncome.toFixed(2)} 億` })
+  
+  // D. 新 EPS 與目標價
+  const simEps = Number(((simNetIncome / capital) * 10).toFixed(2))
+  details.push({ step: "4. 模擬 EPS", formula: `(淨利 ${simNetIncome.toFixed(2)} ÷ 股本 ${capital}) × 10`, result: `${simEps} 元` })
+  
+  const targetH = Number((simEps * simPeH).toFixed(2))
+  const targetL = Number((simEps * simPeL).toFixed(2))
+  details.push({ step: "5. 目標價", formula: `高: EPS ${simEps} × PE ${simPeH} | 低: EPS ${simEps} × PE ${simPeL}`, result: `高 ${targetH} / 低 ${targetL}` })
+  
+  // E. 風險報酬比
+  let upside = 0, downside = 0, rr = 0
+  const lp = livePrice.value
+  if (lp) {
+    upside = (targetH - lp) / lp
+    downside = (targetL - lp) / lp
+    rr = downside !== 0 ? Math.abs(upside / downside) : 0
+    details.push({ step: "6. 報酬與風險", formula: `即時價 ${lp} vs 目標價 ${targetH} / ${targetL}`, result: `上 ${(upside*100).toFixed(2)}% / 下 ${(downside*100).toFixed(2)}%` })
+  }
+
+  return {
+    live_price: lp || "抓取失敗", calc_eps: simEps, calc_rev: simRev.toFixed(2), target_h: targetH, target_l: targetL,
+    upside: lp ? `${(upside*100).toFixed(2)}%` : "-", downside: lp ? `${(downside*100).toFixed(2)}%` : "-", rr: lp ? rr.toFixed(2) : "-", details
+  }
+})
+
+// 2. 歷史股價 Table
+const histRows = computed(() => {
+  const per = perData.value
+  if (!per.H) return []
+  const rows = []
+  const loopLen = Math.min(per.H.length, per.L?.length||0, per.EPS?.length||0)
+  const cYear = per.Current_Year || new Date().getFullYear()
+  const cYearRoc = per.Current_Year_ROC || (cYear - 1911)
+  for(let i=0; i<loopLen; i++) {
+    rows.push({ year_str: `${cYear - 1 - i}/${cYearRoc - 1 - i}`, h: per.H[i], l: per.L[i], eps: per.EPS[i], pe_h: per.PE_H?.[i] || '-', pe_l: per.PE_L?.[i] || '-' })
+  }
+  return rows
+})
+
+// 3. 營收 Table
+const revRows = computed(() => (perData.value.Rev_Names || []).map((name, i) => ({ name, val: perData.value.Rev_Vals[i] })))
+const yoyRows = computed(() => (perData.value.YoY_Names || []).map((name, i) => ({ name, yoy: perData.value.YoY_Vals[i] })))
+
+// 4. 淨利 Table
+const netRows = computed(() => (perData.value.Net_Names || []).map((name, i) => ({ name, val: perData.value.Net_Vals[i] })))
+
+// 5. Q4 檢查 Table
+const q4Rows = computed(() => {
+  const per = perData.value
+  const q1 = per.EPS_Q1 || 0, q2 = per.EPS_Q2 || 0, q3 = per.EPS_Q3 || 0
+  return [
+    { label: "狀態", val: per.Detect_Reason || '-' },
+    { label: "網頁最新季別", val: per.Latest_Quarter_Str || '-' },
+    { label: "Q1 EPS (實際)", val: q1 },
+    { label: "Q2 EPS (實際)", val: q2 },
+    { label: "Q3 EPS (實際)", val: q3 },
+    { label: "Q1-Q3 總和", val: Number((q1 + q2 + q3).toFixed(2)) },
+    { label: "---", val: "---" },
+    { label: "去年 Q4 營收", val: per.Q4_Rev_Actual || 0 },
+    { label: "平均淨利率", val: per.Net_Avg || '0%' },
+    { label: "股本(億)", val: per.Capital || 0 },
+    { label: "Q4 EPS (估算)", val: per.Q4_EPS_Est || 0 },
+    { label: "---", val: "---" },
+    { label: "全年 EPS (估/實)", val: per.Total_EPS_Est || 0 }
+  ]
+})
 </script>
 
 <style>
-/* 引入 Bootstrap CSS 讓畫面排版正常 */
-@import url('https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css');
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-}
+/* 完整還原原本的手機優化與排版 CSS */
+.table-sm td, .table-sm th { padding: 0.3rem; font-size: 0.9rem; }
+.nav-tabs .nav-link { color: #495057; cursor: pointer; }
+.nav-tabs .nav-link.active { background-color: #0d6efd; color: white !important; font-weight: bold; border-color: #0d6efd; }
+.stat-card { transition: all 0.2s; border-left: 4px solid transparent; }
+.stat-card:hover { transform: translateY(-3px); box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important; }
+.card-shadow { box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: none; }
+.input-group-text { background-color: #e9ecef; width: 45px; justify-content: center; }
+.note-box { border-left: 4px solid #ffc107; background-color: #fff3cd; }
 </style>
