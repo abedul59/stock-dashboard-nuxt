@@ -19,10 +19,16 @@
               </div>
               <div class="row g-2 align-items-center">
                 <div class="col-3">
-                  <input v-model="searchQuery.year" type="number" class="form-control form-control-sm" placeholder="年份(選填)">
+                  <select v-model="searchQuery.year" class="form-select form-select-sm">
+                    <option value="">年份(選填)</option>
+                    <option v-for="y in yearOptions" :key="y" :value="y">{{ y }}</option>
+                  </select>
                 </div>
                 <div class="col-3">
-                  <input v-model="searchQuery.month" type="number" class="form-control form-control-sm" placeholder="月份(選填)">
+                  <select v-model="searchQuery.month" class="form-select form-select-sm">
+                    <option value="">月份(選填)</option>
+                    <option v-for="m in monthOptions" :key="m" :value="m">{{ m }}月</option>
+                  </select>
                 </div>
                 <div class="col-4">
                   <input v-model="searchQuery.id" type="text" class="form-control form-control-sm" placeholder="股票代碼">
@@ -311,6 +317,10 @@ const availableStocks = ref([])
 const selectedFile = ref(null)
 const isUploading = ref(false)
 const simInputs = ref({ yoy: 0, net: 0, peH: 0, peL: 0 })
+
+// 產生年份 (2026~2036) 與月份 (1~12) 下拉選單選項
+const yearOptions = Array.from({ length: 11 }, (_, i) => 2026 + i)
+const monthOptions = Array.from({ length: 12 }, (_, i) => i + 1)
 
 // === 輔助函式：解析百分比 ===
 const parsePct = (val) => {
