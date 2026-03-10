@@ -490,16 +490,18 @@ const yoyRows = computed(() => (perData.value.YoY_Names || []).map((name, i) => 
 const netRows = computed(() => (perData.value.Net_Names || []).map((name, i) => ({ name, val: perData.value.Net_Vals[i] })))
 
 // 5. Q4 檢查 Table
+// 5. Q4 檢查 Table
 const q4Rows = computed(() => {
   const per = perData.value
   const q1 = per.EPS_Q1 || 0, q2 = per.EPS_Q2 || 0, q3 = per.EPS_Q3 || 0
   return [
     { label: "狀態", val: per.Detect_Reason || '-' },
     { label: "網頁最新季別", val: per.Latest_Quarter_Str || '-' },
-    { label: "Q1 EPS (實際)", val: q1 },
-    { label: "Q2 EPS (實際)", val: q2 },
-    { label: "Q3 EPS (實際)", val: q3 },
-    { label: "Q1-Q3 總和", val: Number((q1 + q2 + q3).toFixed(2)) },
+    // 讓這裡去讀取 Python 傳來的真實季別名稱，如果沒傳則預設顯示 Q1/Q2/Q3
+    { label: `${per.epsq1N || 'Q1'} EPS (實際)`, val: q1 },
+    { label: `${per.epsq2N || 'Q2'} EPS (實際)`, val: q2 },
+    { label: `${per.epsq3N || 'Q3'} EPS (實際)`, val: q3 },
+    { label: "前三筆 EPS 總和", val: Number((q1 + q2 + q3).toFixed(2)) },
     { label: "---", val: "---" },
     { label: "去年 Q4 營收", val: per.Q4_Rev_Actual || 0 },
     { label: "平均淨利率", val: per.Net_Avg || '0%' },
