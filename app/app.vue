@@ -17,16 +17,17 @@
                   📋 已匯入名單
                 </button>
               </div>
-              <div class="row g-2 align-items-center">
+              
+              <div class="row g-2 align-items-center mb-3">
                 <div class="col-3">
                   <select v-model="searchQuery.year" class="form-select form-select-sm">
-                    <option value="">年份(選填)</option>
+                    <option value="">年份</option>
                     <option v-for="y in yearOptions" :key="y" :value="y">{{ y }}</option>
                   </select>
                 </div>
                 <div class="col-3">
                   <select v-model="searchQuery.month" class="form-select form-select-sm">
-                    <option value="">月份(選填)</option>
+                    <option value="">月份</option>
                     <option v-for="m in monthOptions" :key="m" :value="m">{{ m }}月</option>
                   </select>
                 </div>
@@ -34,9 +35,22 @@
                   <input v-model="searchQuery.id" type="text" class="form-control form-control-sm" placeholder="股票代碼">
                 </div>
                 <div class="col-2">
-                  <button @click="fetchStockData" class="btn btn-primary btn-sm w-100 fw-bold">Go</button>
+                  <button @click="fetchStockData" class="btn btn-primary btn-sm w-100 fw-bold">查詢</button>
                 </div>
               </div>
+
+              <div class="row g-2 align-items-center pt-2 border-top">
+                <div class="col-8">
+                  <small class="text-muted">若資料庫無資料，可即時呼叫雲端爬蟲：</small>
+                </div>
+                <div class="col-4">
+                  <button @click="callCloudApi" class="btn btn-warning btn-sm w-100 fw-bold shadow-sm" :disabled="isFetchingApi">
+                    <span v-if="isFetchingApi" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    {{ isFetchingApi ? '爬蟲中...' : '☁️ 雲端分析' }}
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
@@ -44,7 +58,7 @@
         <div class="col-lg-6">
           <div class="card card-shadow h-100">
             <div class="card-body">
-              <h6 class="card-title text-success fw-bold mb-3">📂 上傳數據 (JSON)</h6>
+              <h6 class="card-title text-success fw-bold mb-3">📂 上傳數據 (手動 JSON)</h6>
               <div class="row g-2 align-items-center">
                 <div class="col-9">
                   <input type="file" @change="onFileSelected" class="form-control form-control-sm" accept=".json">
@@ -316,7 +330,11 @@ const livePrice = ref(null)
 const availableStocks = ref([])
 const selectedFile = ref(null)
 const isUploading = ref(false)
+const isFetchingApi = ref(false) // 控制雲端 API 按鈕狀態
 const simInputs = ref({ yoy: 0, net: 0, peH: 0, peL: 0 })
+
+// 🚀 ⚠️ 這裡替換成您在 Hugging Face 建立的 API 網址！
+const HF_API_URL = "https://lawxstudents168-PER-api.hf.space/api/analyze"
 
 // 產生年份 (2026~2036) 與月份 (1~12) 下拉選單選項
 const yearOptions = Array.from({ length: 11 }, (_, i) => 2026 + i)
@@ -340,7 +358,6 @@ const fetchAvailableStocks = async () => {
   }
 }
 
-// 頁面載入時自動抓取清單供 Modal 使用
 onMounted(() => {
   fetchAvailableStocks()
 })
@@ -349,7 +366,6 @@ onMounted(() => {
 const selectStockFromModal = (stockId) => {
   searchQuery.value.id = stockId
   fetchStockData()
-  // 關閉 Modal
   document.querySelector('#stockListModal .btn-close')?.click()
 }
 
@@ -368,7 +384,7 @@ const uploadFile = async () => {
       const res = await $fetch('/api/upload', { method: 'POST', body: json })
       if (res && res.success) {
         alert(res.message)
-        fetchAvailableStocks() // 更新 Modal 清單
+        fetchAvailableStocks() 
         const firstKey = Object.keys(json)[0]
         if (firstKey) {
           searchQuery.value.id = firstKey
@@ -384,7 +400,7 @@ const uploadFile = async () => {
   reader.readAsText(selectedFile.value)
 }
 
-// === API：查詢股票 ===
+// === API：查詢資料庫股票 ===
 const fetchStockData = async () => {
   if (!searchQuery.value.id) return alert('請輸入股票代碼')
   try {
@@ -406,7 +422,7 @@ const fetchStockData = async () => {
       const priceRes = await $fetch('/api/live-price', { params: { id: searchQuery.value.id } })
       livePrice.value = priceRes.price
     } else {
-      alert('資料庫中找不到該股票資料。')
+      alert('資料庫中找不到該股票資料，請使用【雲端分析】即時抓取！')
       stockData.value = null
     }
   } catch (err) {
@@ -414,7 +430,47 @@ const fetchStockData = async () => {
   }
 }
 
-// === 計算屬性：還原 Django get_dashboard_data 邏輯 ===
+// === API：呼叫 Hugging Face 爬蟲並直接存入 DB ===
+const callCloudApi = async () => {
+  const sid = searchQuery.value.id
+  const targetMonth = searchQuery.value.month || new Date().getMonth() + 1
+  
+  if (!sid) return alert('請先輸入股票代碼！')
+  
+  isFetchingApi.value = true
+  try {
+    // 1. 呼叫 Hugging Face API 進行爬蟲
+    const hfResponse = await $fetch(HF_API_URL, {
+      method: 'POST',
+      body: { stock_id: sid, target_month: parseInt(targetMonth) }
+    })
+    
+    if (hfResponse && hfResponse.success && hfResponse.data) {
+      // 2. 爬蟲成功，將收到的 JSON 直接傳給 Nuxt 自己的上傳 API 寫入 Supabase
+      const uploadRes = await $fetch('/api/upload', { 
+        method: 'POST', 
+        body: hfResponse.data 
+      })
+      
+      if (uploadRes && uploadRes.success) {
+        alert(`✅ 雲端分析完成！已將 ${sid} 存入資料庫。`)
+        fetchAvailableStocks() // 更新清單
+        fetchStockData()       // 自動顯示剛抓下來的數據
+      } else {
+        alert('爬蟲成功，但寫入資料庫失敗。')
+      }
+    } else {
+      alert('Hugging Face 爬蟲 API 回傳失敗。')
+    }
+  } catch (err) {
+    console.error(err)
+    alert(`雲端爬蟲發生錯誤，請確認 HF_API_URL 設定是否正確：${err.message}`)
+  } finally {
+    isFetchingApi.value = false
+  }
+}
+
+// === 計算屬性 ===
 
 // 1. 模擬試算 (含詳細算式)
 const simRes = computed(() => {
@@ -427,24 +483,20 @@ const simRes = computed(() => {
   
   const details = []
   
-  // A. 反推基期
   const baseRev = (1 + origYoy) !== 0 ? origRevPredict / (1 + origYoy) : origRevPredict
   details.push({ step: "1. 反推基期營收", formula: `預估營收 ${origRevPredict} ÷ (1 + 原始YoY ${(origYoy*100).toFixed(2)}%)`, result: `${baseRev.toFixed(2)} 億` })
   
-  // B. 取得輸入值
   const simYoy = simInputs.value.yoy / 100
   const simNet = simInputs.value.net / 100
   const simPeH = simInputs.value.peH || 0
   const simPeL = simInputs.value.peL || 0
   
-  // C. 新營收與淨利
   const simRev = baseRev * (1 + simYoy)
   details.push({ step: "2. 模擬營收", formula: `基期 ${baseRev.toFixed(2)} × (1 + 設定YoY ${(simYoy*100).toFixed(2)}%)`, result: `${simRev.toFixed(2)} 億` })
   
   const simNetIncome = simRev * simNet
   details.push({ step: "3. 模擬淨利", formula: `營收 ${simRev.toFixed(2)} × 設定淨利率 ${(simNet*100).toFixed(2)}%`, result: `${simNetIncome.toFixed(2)} 億` })
   
-  // D. 新 EPS 與目標價
   const simEps = Number(((simNetIncome / capital) * 10).toFixed(2))
   details.push({ step: "4. 模擬 EPS", formula: `(淨利 ${simNetIncome.toFixed(2)} ÷ 股本 ${capital}) × 10`, result: `${simEps} 元` })
   
@@ -452,7 +504,6 @@ const simRes = computed(() => {
   const targetL = Number((simEps * simPeL).toFixed(2))
   details.push({ step: "5. 目標價", formula: `高: EPS ${simEps} × PE ${simPeH} | 低: EPS ${simEps} × PE ${simPeL}`, result: `高 ${targetH} / 低 ${targetL}` })
   
-  // E. 風險報酬比
   let upside = 0, downside = 0, rr = 0
   const lp = livePrice.value
   if (lp) {
@@ -489,18 +540,16 @@ const yoyRows = computed(() => (perData.value.YoY_Names || []).map((name, i) => 
 // 4. 淨利 Table
 const netRows = computed(() => (perData.value.Net_Names || []).map((name, i) => ({ name, val: perData.value.Net_Vals[i] })))
 
-// 5. Q4 檢查 Table
-// 5. Q4 檢查 Table
+// 5. Q4 檢查 Table (套用動態季別名稱修正)
 const q4Rows = computed(() => {
   const per = perData.value
   const q1 = per.EPS_Q1 || 0, q2 = per.EPS_Q2 || 0, q3 = per.EPS_Q3 || 0
   return [
     { label: "狀態", val: per.Detect_Reason || '-' },
     { label: "網頁最新季別", val: per.Latest_Quarter_Str || '-' },
-    // 讓這裡去讀取 Python 傳來的真實季別名稱，如果沒傳則預設顯示 Q1/Q2/Q3
-    { label: `${per.epsq1N || 'Q1'} EPS (實際)`, val: q1 },
-    { label: `${per.epsq2N || 'Q2'} EPS (實際)`, val: q2 },
-    { label: `${per.epsq3N || 'Q3'} EPS (實際)`, val: q3 },
+    { label: `${per.epsq1N || '最新季'} EPS (實際)`, val: q1 },
+    { label: `${per.epsq2N || '前一季'} EPS (實際)`, val: q2 },
+    { label: `${per.epsq3N || '前二季'} EPS (實際)`, val: q3 },
     { label: "前三筆 EPS 總和", val: Number((q1 + q2 + q3).toFixed(2)) },
     { label: "---", val: "---" },
     { label: "去年 Q4 營收", val: per.Q4_Rev_Actual || 0 },
